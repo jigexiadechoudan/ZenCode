@@ -1,0 +1,8 @@
+/target/
+/.zencode/
+/config.local.yaml
+/.zencode-config-*.tmp
+/start-zencode.local.cmd
+/.env
+/.env.*
+!/.env.example

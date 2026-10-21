@@ -1,0 +1,65 @@
+.changes-list { padding: 16px; }
+.changes-head { margin-bottom: 12px; font-size: 12px; }
+.changes-head strong { color: var(--ink); font-weight: 650; }
+.changes-filter { width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; background: #fff; color: var(--ink); font: inherit; font-size: 12px; }
+.changes-filter:focus-visible, .diff-content:focus-visible { outline: 3px solid #79c5bc; outline-offset: 2px; }
+.changes-state { color: var(--muted); font-size: 11px; line-height: 1.7; margin: 10px 0; }
+.changed-file { display: block; width: 100%; padding: 12px 10px; margin: 3px 0; text-align: left; background: transparent; border: 1px solid transparent; border-bottom-color: var(--line); border-radius: 7px; color: var(--ink); }
+.changed-file:hover { background: #edf5f3; border-color: #c6ded9; }
+.changed-file-path { display: block; overflow-wrap: anywhere; font: 12px/1.6 "Cascadia Code", Consolas, monospace; }
+.change-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.change-badge { padding: 2px 5px; border-radius: 4px; background: #e9efef; color: #536e74; font-size: 10px; }
+.change-badge.added { color: #267052; background: #e1f1e8; }
+.change-badge.conflict { color: #a4453c; background: #ffe8df; }
+.change-origin { display: block; margin-top: 6px; font-size: 10px; color: var(--muted); overflow-wrap: anywhere; }
+.changes-hint { color: var(--muted); font-size: 10px; line-height: 1.6; margin: 16px 0 0; }
+
+.diff-dialog { --diff-add: #edf8f1; --diff-remove: #fff0ed; width: min(1120px, calc(100vw - 48px)); height: min(820px, calc(100dvh - 64px)); max-width: none; max-height: none; border: 1px solid #c6d9d7; border-radius: 14px; padding: 0; color: var(--ink); background: var(--paper); box-shadow: 0 24px 90px #182d3540; overflow: hidden; }
+.diff-dialog[open] { display: flex; flex-direction: column; }
+.diff-dialog::backdrop { background: #182d3580; }
+.diff-heading { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 20px 24px 15px; border-bottom: 1px solid var(--line); }
+.diff-heading > div { min-width: 0; }
+.diff-heading h2 { margin: 7px 0 0; font: 600 15px/1.6 "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; max-height: 80px; overflow: auto; }
+.diff-heading > button { flex: none; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: #fff; font-size: 21px; }
+.diff-toolbar { display: flex; flex: none; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 24px; background: var(--sidebar); border-bottom: 1px solid var(--line); }
+.diff-toolbar select { flex: 1; min-width: 120px; width: 200px; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); padding: 7px; font-size: 12px; }
+.diff-scope { display: flex; gap: 3px; padding: 3px; border: 1px solid #cedddb; border-radius: 8px; }
+.diff-toolbar button { border: 1px solid var(--line); background: #fff; color: #4f6a73; border-radius: 5px; padding: 6px 9px; font-size: 11px; }
+.diff-scope button { border: 0; background: transparent; }
+.diff-scope button.active { background: var(--accent); color: #fff; }
+.diff-tools { display: flex; gap: 6px; }
+.diff-tools button[aria-pressed="true"] { background: var(--accent-soft); border-color: #afd5cc; color: var(--accent); }
+.diff-caption { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.diff-stats { display: flex; gap: 10px; align-items: center; font: 600 12px "Cascadia Code", Consolas, monospace; }
+.diff-stats small { font: 10px "Segoe UI", sans-serif; color: var(--muted); }
+.diff-added-count { color: #25704b; }
+.diff-removed-count { color: #ac443b; }
+.diff-notice { flex: none; padding: 12px 24px; margin: 0; background: #fff7e9; color: #825b30; font-size: 12px; line-height: 1.7; }
+.diff-content { flex: 1; min-height: 0; overflow: auto; background: #fff; scrollbar-color: #bbcfc9 #f4f8f7; }
+.diff-lines { min-width: 100%; width: max-content; padding-bottom: 18px; font: 12px/1.8 "Cascadia Code", Consolas, "Microsoft YaHei UI", monospace; }
+.diff-line { display: grid; grid-template-columns: 54px 54px 24px minmax(0, 1fr); min-height: 22px; }
+.diff-number { color: #768d89; padding: 0 9px 0 3px; text-align: right; user-select: none; background: #f3f7f680; border-right: 1px solid #dce8e366; }
+.diff-sign { text-align: center; user-select: none; }
+.diff-text { padding-right: 20px; white-space: pre; font: inherit; tab-size: 4; }
+.diff-line.added { background: var(--diff-add); }
+.diff-line.removed { background: var(--diff-remove); }
+.diff-line.added .diff-sign { color: #267052; }
+.diff-line.removed .diff-sign { color: #aa463c; }
+.diff-line.hunk { background: #eaf1f7; color: #476581; border-block: 1px solid #dbe6f0; margin-top: 6px; }
+.diff-line.metadata { color: var(--muted); background: #fafcfb; }
+.diff-content.wrap .diff-lines { width: 100%; }
+.diff-content.wrap .diff-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-footer { flex: none; padding: 10px 24px; border-top: 1px solid var(--line); color: var(--muted); background: var(--sidebar); font-size: 10px; }
+@media (max-width: 700px) {
+  .diff-dialog { width: 100vw; height: 100dvh; margin: 0; border-radius: 0; border: 0; }
+  .diff-heading { padding: 16px; }
+  .diff-heading h2 { font-size: 13px; max-height: 66px; }
+  .diff-toolbar { padding: 10px 16px; gap: 9px; }
+  .diff-toolbar select { flex-basis: 100%; width: 100%; }
+  .diff-tools { margin-left: auto; }
+  .diff-toolbar button { padding: 7px 8px; }
+  .diff-caption, .diff-notice, .diff-footer { padding-inline: 16px; }
+  .diff-line { grid-template-columns: 36px 36px 20px minmax(0, 1fr); }
+  .diff-number { padding-right: 5px; font-size: 10px; }
+  .diff-lines { font-size: 11px; }
+}

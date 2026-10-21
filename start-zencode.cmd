@@ -2,9 +2,8 @@
 setlocal
 chcp 65001 >nul
 
-rem Missing/empty private config opens the local model settings page after packaging.
+rem Every run requests a session key; credentials are never stored in the config.
 
-if exist "F:\jdk21\bin\java.exe" set "JAVA_HOME=F:\jdk21"
 where mvn >nul 2>nul
 if errorlevel 1 (
   echo Maven was not found in PATH. Install Maven or run zencode.cmd with a packaged JAR.
@@ -13,7 +12,7 @@ if errorlevel 1 (
 )
 
 pushd "%~dp0"
-call mvn -o -q -DskipTests package
+call mvn -q -Dmaven.test.skip=true package
 if errorlevel 1 (
   echo Packaging failed. ZenCode was not started.
   popd

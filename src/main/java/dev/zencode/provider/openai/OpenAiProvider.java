@@ -78,7 +78,6 @@ public final class OpenAiProvider implements ChatProvider {
     private void addTurnToMessages(ArrayNode messages, ConversationTurn turn) {
         ObjectNode assistantMsg = null;
         StringBuilder assistantText = new StringBuilder();
-        StringBuilder assistantThinking = new StringBuilder();
         ArrayNode toolCallsArray = null;
 
         for (ConversationContent content : turn.contents()) {
@@ -86,17 +85,15 @@ public final class OpenAiProvider implements ChatProvider {
                 messages.addObject().put("role", "user").put("content", ut.text());
                 assistantMsg = null;
                 assistantText.setLength(0);
-                assistantThinking.setLength(0);
                 toolCallsArray = null;
             } else if (content instanceof ConversationContent.AssistantText at) {
                 assistantText.append(at.text());
-            } else if (content instanceof ConversationContent.ThinkingText tt) {
-                assistantThinking.append(tt.text());
             } else if (content instanceof ConversationContent.ToolCallBlock tcb) {
                 if (assistantMsg == null) {
                     assistantMsg = messages.addObject();
                     assistantMsg.put("role", "assistant");
-                    assistantMsg.put("content", assembleAssistantText(assistantText, assistantThinking));
+                    // OpenAI 兼容协议不回传思考内容；没有正文时使用空字符串。
+                    assistantMsg.put("content", assistantText.toString());
                     toolCallsArray = assistantMsg.putArray("tool_calls");
                 }
                 ObjectNode tcNode = toolCallsArray.addObject();
@@ -112,34 +109,21 @@ public final class OpenAiProvider implements ChatProvider {
                 toolMsg.put("content", trb.toolResult().result().content());
                 assistantMsg = null;
                 assistantText.setLength(0);
-                assistantThinking.setLength(0);
                 toolCallsArray = null;
             }
         }
 
-        // 纯文本轮次：没有工具调用时补齐 assistant 消息
-        if (assistantMsg == null && turn.hasToolCalls() == false && !turn.contents().isEmpty()) {
-            boolean hasAssistantContent = false;
-            for (ConversationContent content : turn.contents()) {
-                if (content instanceof ConversationContent.AssistantText
-                        || content instanceof ConversationContent.ThinkingText) {
-                    hasAssistantContent = true;
-                    break;
-                }
-            }
-            if (hasAssistantContent) {
-                messages.addObject().put("role", "assistant")
-                        .put("content", assembleAssistantText(assistantText, assistantThinking));
+        // 纯文本轮次：没有工具调用时补齐 assistant 消息。思考内容不参与历史回放。
+        boolean hasAssistantText = false;
+        for (ConversationContent content : turn.contents()) {
+            if (content instanceof ConversationContent.AssistantText at && !at.text().isBlank()) {
+                hasAssistantText = true;
+                break;
             }
         }
-    }
-
-    /** 把思考与文本合并为 OpenAI assistant 消息的 content（OpenAI 不单独回传思考）。 */
-    private static String assembleAssistantText(StringBuilder text, StringBuilder thinking) {
-        String body = thinking.length() > 0
-                ? "【思考】" + thinking + (text.length() > 0 ? "\n" + text : "")
-                : text.toString();
-        return body.isEmpty() ? null : body;
+        if (assistantMsg == null && !turn.hasToolCalls() && hasAssistantText) {
+            messages.addObject().put("role", "assistant").put("content", assistantText.toString());
+        }
     }
 
     private StreamHandle sendRequest(ObjectNode body, Consumer<StreamEvent> consumer) {

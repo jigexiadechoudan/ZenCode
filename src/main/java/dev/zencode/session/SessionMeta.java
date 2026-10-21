@@ -11,5 +11,18 @@ package dev.zencode.session;
  * @param lastActiveMs  最后活跃时间戳（毫秒）
  */
 public record SessionMeta(String id, String title, String summary,
-                          int messageCount, long createdAtMs, long lastActiveMs) {
+                          int messageCount, long createdAtMs, long lastActiveMs,
+                          String projectId, boolean manualTitle) {
+    public SessionMeta(String id, String title, String summary, int messageCount,
+                       long createdAtMs, long lastActiveMs) {
+        this(id, title, summary, messageCount, createdAtMs, lastActiveMs, null, false);
+    }
+
+    public SessionMeta renamed(String name) {
+        return new SessionMeta(id, name, summary, messageCount, createdAtMs, lastActiveMs, projectId, true);
+    }
+
+    public SessionMeta inProject(String project) {
+        return new SessionMeta(id, title, summary, messageCount, createdAtMs, lastActiveMs, project, manualTitle);
+    }
 }

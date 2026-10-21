@@ -108,7 +108,7 @@ class HarnessRuntimeRegressionTest {
         manager.start();
         Path blocked = Files.createDirectory(store.sessionsDir().resolve(manager.currentId() + ".jsonl"));
         conversation.commit(ConversationTurn.userTextOnly("retry-me"));
-        manager.savePending();
+        assertThrows(IllegalStateException.class, manager::savePending);
         Files.delete(blocked);
         manager.savePending();
         assertEquals("retry-me", store.loadValidated(manager.currentId()).turns().getFirst().userMessage().text());

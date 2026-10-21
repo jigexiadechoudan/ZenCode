@@ -23,15 +23,11 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar" id="workspace-sidebar" aria-label="工作区导航">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">m<span></span></span><div><strong>ZenCode</strong><small>CODING AGENT</small></div></div>
-      <button id="new-session" class="new-session" type="button"><span aria-hidden="true">＋</span> 新建对话</button>
-      <div class="nav-group">
-        <div class="nav-label">当前项目</div>
-        <div class="project-card"><span class="project-icon" aria-hidden="true">⌁</span><div><strong id="project-name">工作区</strong><small id="project-path">正在连接…</small></div></div>
-      </div>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">Z</span><strong>ZenCode</strong></div>
+      <button id="new-session" class="new-session" type="button"><span aria-hidden="true">＋</span> 新建聊天</button>
+      <button id="add-project" class="add-project" type="button"><span aria-hidden="true">▱</span> 添加项目</button>
       <div class="nav-group sessions-group">
-        <div class="nav-label">最近对话</div>
-        <div id="sessions" class="session-list" aria-label="最近对话"><p class="sidebar-empty">暂无保存的对话</p></div>
+        <div id="sessions" class="session-list" aria-label="聊天与项目"><p class="sidebar-empty">暂无聊天</p></div>
       </div>
       <div class="sidebar-foot"><span class="connection-dot" id="connection-dot"></span><span id="connection-label">正在连接本地服务</span></div>
     </aside>
@@ -43,8 +39,8 @@
         <button id="open-activity" type="button" aria-haspopup="dialog" aria-controls="activity-drawer" aria-expanded="false">执行记录</button>
       </nav>
       <header class="main-header">
-        <div><div class="eyebrow">WORKSPACE / CONVERSATION</div><h1>让代码往前走。</h1></div>
-        <div class="header-actions"><span class="model-pill" id="model-pill">模型待连接</span><button id="open-settings" class="settings-trigger" type="button" aria-haspopup="dialog" aria-controls="settings-dialog" disabled>模型设置</button><label class="mode-control">权限 <select id="permission-mode" aria-label="权限模式"><option value="LOCKED">锁定</option><option value="READ_ONLY">只读</option><option value="DEFAULT">默认</option><option value="LENIENT">宽松</option><option value="TRUST_ALL">完全信任</option><option value="PLAN">计划</option></select></label></div>
+        <div class="chat-heading"><span id="project-name" class="chat-context">普通聊天</span><h1 id="current-chat-title">新建聊天</h1><small id="project-path" class="workspace-path"></small></div>
+        <button id="toggle-activity" class="header-tool" type="button" aria-controls="workspace-activity" aria-expanded="false">轨迹与变更</button>
       </header>
       <div id="connection-banner" class="connection-banner" role="status">
         <span id="connection-status">正在同步本地会话，输入内容会保留。</span>
@@ -53,36 +49,43 @@
       <div class="conversation-stage">
         <div class="conversation-scroll" id="conversation-scroll" tabindex="0" aria-label="对话记录">
           <div class="conversation" id="conversation" aria-live="polite">
-            <section class="welcome" id="welcome"><div class="welcome-symbol" aria-hidden="true"><span>✳</span></div><p class="welcome-kicker">准备就绪</p><h2>从一个清晰的问题开始。</h2><p>描述你想改的功能、遇到的错误，或者需要理解的代码。ZenCode 会在执行记录中展示过程，并按当前权限模式确认操作。</p><div class="suggestions"><button type="button" data-prompt="分析当前项目的结构和主要模块">了解项目结构</button><button type="button" data-prompt="检查当前改动并解释可能的风险">检查当前改动</button><button type="button" data-prompt="帮我定位一个错误的原因">定位一个错误</button></div></section>
+            <section class="welcome" id="welcome"><span class="welcome-mark" aria-hidden="true">Z</span><h2>新建聊天</h2></section>
           </div>
         </div>
         <button id="jump-latest" class="jump-latest" type="button" aria-controls="conversation-scroll" hidden>回到最新 ↓</button>
       </div>
       <div class="composer-wrap">
+        <div id="command-palette" class="command-palette" role="listbox" aria-label="斜杠命令" hidden></div>
         <form id="composer" class="composer">
           <label class="sr-only" for="prompt">给 ZenCode 发送消息</label>
-          <textarea id="prompt" rows="3" placeholder="描述任务，或输入 / 查看命令…" spellcheck="false"></textarea>
+          <textarea id="prompt" rows="3" placeholder="描述任务，或输入 / 打开命令面板…" spellcheck="false" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="command-palette" aria-expanded="false"></textarea>
           <div class="composer-bottom">
-            <div class="composer-meta"><span id="composer-status" role="status" aria-live="polite">正在连接…</span><span class="composer-shortcut">Enter 发送 · Shift + Enter 换行</span></div>
-            <div><button id="cancel" class="cancel-button" type="button" hidden>停止</button><button id="send" class="send-button" type="submit" disabled><span id="send-label">发送</span> <span aria-hidden="true">↗</span></button></div>
+            <div class="composer-controls">
+              <button id="open-settings" class="model-button" type="button" aria-haspopup="dialog" aria-controls="settings-dialog" disabled><span id="model-pill" class="model-pill">模型待连接</span><span class="model-button-icon" aria-hidden="true">⚙</span></button>
+              <label class="mode-control">权限 <select id="permission-mode" aria-label="权限模式"><option value="LOCKED">锁定</option><option value="READ_ONLY">只读</option><option value="DEFAULT">默认</option><option value="LENIENT">宽松</option><option value="TRUST_ALL">完全信任</option><option value="PLAN">计划</option></select></label>
+            </div>
+            <div class="composer-actions"><button id="cancel" class="cancel-button" type="button" hidden>停止</button><button id="send" class="send-button" type="submit" disabled><span id="send-label">发送</span> <span aria-hidden="true">↗</span></button></div>
+          </div>
+          <div class="composer-meta">
+            <span id="composer-status" role="status" aria-live="polite">正在连接…</span><span class="composer-shortcut">Enter 发送 · Shift + Enter 换行</span>
           </div>
         </form>
-        <p class="composer-note" id="composer-note">工具活动只显示安全摘要；权限决定始终由你确认。</p>
       </div>
     </main>
 
     <aside class="activity-panel" id="workspace-activity" aria-label="执行记录">
-      <div class="activity-heading"><div><div class="eyebrow">LIVE ACTIVITY</div><h2>执行记录</h2></div><span class="activity-count" id="activity-count">0</span></div>
-      <p class="activity-intro">每一次工具调用，都留下可追踪的脚印。</p>
-      <div class="rail-tabs"><button id="tab-activity" class="active" type="button">工具活动</button><button id="tab-changes" type="button">文件变更</button></div>
-      <div id="activity-list" class="activity-list"><div class="activity-empty"><span aria-hidden="true">◎</span><strong>还没有执行记录</strong><p>发送任务后，读取文件、修改代码与命令执行会出现在这里。</p></div></div>
+      <div class="activity-heading"><h2>执行记录</h2><span class="activity-count" id="activity-count">0</span><button id="close-activity" type="button" aria-label="关闭轨迹与变更面板">×</button></div>
+      <div class="rail-tabs"><button id="tab-activity" class="active" type="button">轨迹记录</button><button id="tab-changes" type="button">文件变更</button></div>
+      <div id="trace-panel" class="trace-panel">
+        <input id="trace-filter" class="trace-filter" type="search" aria-label="筛选执行轨迹" placeholder="筛选轨迹…" autocomplete="off">
+        <div id="activity-list" class="activity-list"><div class="activity-empty">暂无执行轨迹</div></div>
+      </div>
       <div id="changes-list" class="changes-list" hidden>
         <div class="changes-head"><strong id="changes-summary">文件变更</strong><button id="refresh-changes" type="button" disabled>刷新</button></div>
         <label class="sr-only" for="filter-changes">筛选文件路径</label>
         <input id="filter-changes" class="changes-filter" type="search" placeholder="筛选文件路径…" autocomplete="off" spellcheck="false">
-        <p id="changes-state" class="changes-state" role="status">打开此面板后读取 Git 状态。</p>
+        <p id="changes-state" class="changes-state" role="status">打开此面板后读取文件变更。</p>
         <div id="change-files"></div>
-        <p class="changes-hint">点击文件查看差异。这里显示当前工作区的全部未提交变更，不仅是本次任务的修改。</p>
       </div>
       <div class="activity-footer"><span class="activity-footer-icon" aria-hidden="true">◇</span><div><strong>当前运行状态</strong><span id="run-status">等待新任务</span></div></div>
     </aside>
@@ -100,7 +103,7 @@
   </dialog>
 
   <dialog id="diff-dialog" class="diff-dialog" aria-labelledby="diff-title">
-    <header class="diff-heading"><div><div class="eyebrow">文件变更 · 只读</div><h2 id="diff-title">变更详情</h2></div><button id="close-diff" type="button" aria-label="关闭文件差异">×</button></header>
+    <header class="diff-heading"><div><h2 id="diff-title">变更详情</h2></div><button id="close-diff" type="button" aria-label="关闭文件差异">×</button></header>
     <div class="diff-toolbar">
       <label class="sr-only" for="diff-file">选择变更文件</label><select id="diff-file"></select>
       <div class="diff-scope" role="group" aria-label="差异比较范围"><button id="diff-worktree" type="button" aria-pressed="true" class="active">工作区</button><button id="diff-index" type="button" aria-pressed="false">暂存区</button></div>
@@ -110,33 +113,52 @@
     <p id="diff-notice" class="diff-notice" role="status" hidden></p>
     <div id="diff-content" class="diff-content" tabindex="0" role="region" aria-label="文件差异，左侧为原行号，右侧为新行号"></div>
     <p id="diff-feedback" class="dialog-feedback" role="status"></p>
-    <footer class="diff-footer">仅查看，不会暂存、撤销或写入文件。按 Esc 关闭。</footer>
+    <footer class="diff-footer">Esc 关闭</footer>
   </dialog>
 
   <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title">
-    <header class="settings-heading"><div><div class="eyebrow">LOCAL CONFIGURATION</div><h2 id="settings-title">模型设置</h2></div><button id="close-settings" type="button" aria-label="关闭模型设置">×</button></header>
+    <header class="settings-heading"><h2 id="settings-title">模型设置</h2><button id="close-settings" type="button" aria-label="关闭模型设置">×</button></header>
     <div class="settings-scroll">
-      <div class="settings-lifecycle"><div><span>当前运行</span><strong id="settings-active">正在读取…</strong></div><b aria-hidden="true">→</b><div><span>下次启动 Provider</span><strong id="settings-next">正在读取…</strong></div></div>
-      <p id="settings-effect" class="settings-effect">保存并立即应用模型，无需退出终端；当前对话会保留。</p>
+      <div class="settings-lifecycle"><div><span>当前运行</span><strong id="settings-active">正在读取…</strong></div><b aria-hidden="true">→</b><div><span>下次启动</span><strong id="settings-next">正在读取…</strong></div></div>
+      <p id="settings-effect" class="settings-effect">保存后立即切换；不会验证连通性。</p>
       <p id="settings-override" class="settings-override" hidden></p>
       <label class="settings-label settings-provider">编辑 Provider<select id="settings-provider" disabled><option>正在读取…</option></select></label>
       <form id="settings-form" autocomplete="off">
         <fieldset id="settings-fields" class="settings-fields" disabled>
           <div class="settings-grid">
-            <label class="settings-label">Provider 名称<input id="settings-name" type="text" required maxlength="80" placeholder="例如 my-provider" spellcheck="false"><small>本地配置名称，不是服务商网址；已有名称保持不变。</small></label>
-            <label class="settings-label">接口协议<select id="settings-protocol"><option value="openai">OpenAI 兼容 · Chat Completions</option><option value="anthropic">Anthropic · Messages</option></select><small>按服务商文档选择，与模型名称无关。</small></label>
+            <label class="settings-label">Provider 名称<input id="settings-name" type="text" required maxlength="80" placeholder="例如 my-provider" spellcheck="false"><small>本地名称；保存后不可直接改名。</small></label>
+            <label class="settings-label">接口协议<select id="settings-protocol"><option value="openai">OpenAI 兼容 · Chat Completions</option><option value="anthropic">Anthropic · Messages</option></select><small>按服务商文档选择。</small></label>
           </div>
           <label class="settings-label">Base URL<input id="settings-url" type="url" required maxlength="2048" spellcheck="false" placeholder="https://your-provider.example/v1"><small id="settings-url-hint"></small></label>
           <p id="settings-endpoint" class="settings-endpoint">填写 Base URL 后显示实际请求地址</p>
-          <label class="settings-label">模型 ID<input id="settings-model" type="text" required maxlength="256" spellcheck="false" placeholder="填写服务商提供的完整模型 ID"><small>这里不获取在线模型列表，请使用服务商提供的名称。</small></label>
-          <label class="settings-label">API Key<input id="settings-key" type="password" maxlength="8192" autocomplete="new-password" spellcheck="false" placeholder="粘贴 API Key，或填写 ${ENV_NAME}"><small id="settings-key-hint">已保存的密钥不会回传到页面。</small></label>
-          <label class="settings-check"><input id="settings-thinking" type="checkbox"><span>启用 Anthropic 思考模式<small>仅对 Anthropic 协议生效，且需要所选模型支持。</small></span></label>
+          <label class="settings-label">模型 ID<input id="settings-model" type="text" required maxlength="256" spellcheck="false" placeholder="填写服务商提供的完整模型 ID"><small>填写服务商提供的完整模型 ID。</small></label>
+          <div class="settings-label">
+            <label for="settings-key">API Key</label>
+            <div class="settings-key-row">
+              <input id="settings-key" type="password" maxlength="8192" autocomplete="new-password" spellcheck="false" placeholder="填写本次运行使用的 API Key">
+              <button id="settings-reveal" class="settings-reveal" type="button" aria-pressed="false" disabled>显示</button>
+            </div>
+            <small id="settings-key-hint">仅用于本次运行，不保存到本地，退出后失效。</small>
+          </div>
+          <label class="settings-check"><input id="settings-thinking" type="checkbox"><span>启用思考模式<small>仅 Anthropic 协议生效，需模型支持。</small></span></label>
           <label class="settings-check"><input id="settings-default" type="checkbox"><span>默认启动使用此 Provider</span></label>
         </fieldset>
       </form>
-      <p class="settings-file">本地保存位置<code id="settings-path">正在读取…</code>直接填写的密钥以明文保存到本地私有 YAML，不写入浏览器存储。若不希望密钥落盘，可填写环境变量引用；保存会保留其他配置与注释，但可能调整 YAML 排版。</p>
+      <p class="settings-file">模型设置保存位置<code id="settings-path">正在读取…</code>密钥仅在内存中使用；每次重新启动需重新填写。</p>
     </div>
-    <footer class="settings-bottom"><p id="settings-status" class="settings-status" role="status" aria-live="polite">未连接模型，不进行在线验证。</p><div class="settings-actions"><button id="reload-settings" type="button">重新加载</button><button id="save-settings" class="settings-save" type="submit" form="settings-form" disabled>保存并应用</button></div></footer>
+    <footer class="settings-bottom"><p id="settings-status" class="settings-status" role="status" aria-live="polite">保存后不会发送验证请求。</p><div class="settings-actions"><button id="reload-settings" type="button">重新加载</button><button id="save-settings" class="settings-save" type="submit" form="settings-form" disabled>保存并应用</button></div></footer>
+  </dialog>
+
+  <dialog id="manage-dialog" class="manage-dialog" aria-labelledby="manage-title">
+    <form id="manage-form">
+      <header class="manage-heading"><h2 id="manage-title"></h2><button id="manage-close" type="button" aria-label="关闭">×</button></header>
+      <div class="manage-body">
+        <p id="manage-message" hidden></p>
+        <label id="manage-name-label" hidden>名称<input id="manage-name" maxlength="160" autocomplete="off"></label>
+        <label id="manage-project-label" hidden>所属项目<select id="manage-project"></select></label>
+      </div>
+      <footer class="manage-actions"><button id="manage-cancel" type="button">取消</button><button id="manage-confirm" class="primary" type="submit">保存</button></footer>
+    </form>
   </dialog>
 
   <dialog id="permission-dialog" class="permission-dialog" aria-labelledby="permission-title">

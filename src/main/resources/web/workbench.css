@@ -1,22 +1,22 @@
 .compact-toolbar { display: none; }
 .connection-banner {
   display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 9px 20px; background: #fff4e7; border-bottom: 1px solid #ecdac4;
-  color: #805c34; font-size: 12px; line-height: 1.5;
+  padding: 9px 20px; background: #f5f5f5; border-bottom: 1px solid #dcdcdc;
+  color: #616161; font-size: 12px; line-height: 1.5;
 }
-.connection-banner button { flex: none; border: 1px solid #d8bf9c; border-radius: 6px; color: #805c34; background: #fff; padding: 6px 9px; font-size: 11px; }
+.connection-banner button { flex: none; border: 1px solid #c2c2c2; border-radius: 4px; color: #616161; background: #ffffff; padding: 6px 9px; font-size: 11px; }
 .workbench-drawer {
   padding: 0; border: 1px solid var(--line); background: var(--paper); color: var(--ink);
   width: min(360px, calc(100vw - 20px)); max-width: none; height: 100dvh; max-height: 100dvh;
   margin: 0; overflow: hidden; box-shadow: var(--shadow);
 }
 .workbench-drawer[open] { display: flex; flex-direction: column; }
-.workbench-drawer::backdrop { background: rgba(24,45,53,.35); }
-.navigation-drawer { inset: 0 auto 0 0; border-radius: 0 14px 14px 0; }
-.activity-drawer { inset: 0 0 0 auto; margin-left: auto; border-radius: 14px 0 0 14px; }
+.workbench-drawer::backdrop { background: rgba(0,0,0,.35); }
+.navigation-drawer { inset: 0 auto 0 0; border-radius: 0 4px 4px 0; }
+.activity-drawer { inset: 0 0 0 auto; margin-left: auto; border-radius: 4px 0 0 4px; }
 .drawer-heading { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
 .drawer-heading h2 { margin: 0; font-size: 15px; }
-.drawer-heading button { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); font-size: 20px; }
+.drawer-heading button { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 4px; background: #ffffff; color: var(--ink); font-size: 20px; }
 .drawer-content { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 .workbench-drawer .sidebar, .workbench-drawer .activity-panel { display: flex; flex: 1; width: 100%; min-height: 0; height: auto; border: 0; }
 .workbench-drawer .sidebar { padding: 18px; }
@@ -25,13 +25,13 @@
 .workbench-drawer .sidebar .nav-group { display: flex; flex-direction: column; }
 .workbench-drawer .activity-heading { display: none; }
 .workbench-drawer .activity-intro { margin-top: 16px; }
-.dialog-feedback { flex: none; margin: 0; padding: 10px 18px; background: #fff4e7; color: #805c34; font-size: 12px; line-height: 1.5; }
+.dialog-feedback { flex: none; margin: 0; padding: 10px 18px; background: #f5f5f5; color: #616161; font-size: 12px; line-height: 1.5; }
 .dialog-feedback:empty { display: none; }
 .permission-dialog { max-height: calc(100dvh - 24px); overflow-y: auto; }
 @media (max-width: 1130px) {
   .compact-toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--sidebar); }
   .compact-toolbar strong { font: 650 14px "Segoe UI Variable", "Microsoft YaHei UI", sans-serif; }
-  .compact-toolbar button { border: 1px solid #c7dcd8; border-radius: 7px; background: #fff; color: #225e5a; padding: 7px 10px; font-size: 12px; }
+  .compact-toolbar button { border: 1px solid #d7d7d7; border-radius: 4px; background: #ffffff; color: #515151; padding: 7px 10px; font-size: 12px; }
   #open-navigation { display: none; }
 }
 @media (max-width: 700px) {

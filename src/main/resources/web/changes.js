@@ -12,6 +12,7 @@
     let files = [];
     let selected = null;
     let area = 'worktree';
+    let source = 'git';
     let connected = false;
     let listGeneration = 0;
     let detailGeneration = 0;
@@ -43,9 +44,10 @@
         button.setAttribute('aria-label', `${label(file)}：${file.path}，查看差异`);
         const path = element('span', 'changed-file-path', file.path);
         const tags = element('span', 'change-badges');
-        tags.append(badge(label(file), file.conflict ? 'conflict' : file.untracked ? 'added' : ''));
-        if (!file.untracked && file.index !== ' ') tags.append(badge('已暂存'));
-        if (file.untracked || file.worktree !== ' ') tags.append(badge('工作区'));
+        const change = label(file);
+        tags.append(badge(change, file.conflict ? 'conflict' : change === '新增' ? 'added' : change === '删除' ? 'removed' : ''));
+        if (source === 'git' && !file.untracked && file.index !== ' ') tags.append(badge('已暂存'));
+        if (source === 'git' && (file.untracked || file.worktree !== ' ')) tags.append(badge('工作区'));
         button.append(path, tags);
         if (file.oldPath) button.append(element('span', 'change-origin', '原路径：' + file.oldPath));
         button.addEventListener('click', () => open(file, button));
@@ -75,16 +77,20 @@
         ui.notice.hidden = false;
         ui.notice.textContent = '正在刷新文件状态…';
       }
-      ui.state.textContent = '正在读取 Git 状态…';
+      ui.state.textContent = '正在读取文件变更…';
       ui.files.setAttribute('aria-busy', 'true');
       try {
         const result = await api('/api/changes', undefined, abort.signal);
         if (generation !== listGeneration) return;
         files = result.files || [];
+        source = result.source || 'git';
+        ui.index.parentElement.hidden = source !== 'git';
+        if (source !== 'git') area = 'worktree';
         const staged = files.filter(file => !file.untracked && file.index !== ' ').length;
         const working = files.filter(file => file.untracked || file.worktree !== ' ').length;
         ui.summary.textContent = result.available ? `${files.length}${result.truncated ? '+' : ''} 个文件` : '无法查看变更';
         ui.state.textContent = !result.available ? result.message
+          : source !== 'git' ? (files.length ? `${files.length} 个文件发生变化` : '暂无文件变更。') + (result.message ? ' ' + result.message : '')
           : !files.length ? '工作区干净，没有未提交的变更。'
           : `${staged} 个已暂存 · ${working} 个工作区变更` + (result.truncated ? '；列表仅显示前 200 个文件。' : '');
         renderFiles();
@@ -142,7 +148,8 @@
       ui.title.textContent = selected.path;
       ui.title.title = selected.path;
       ui.select.value = selected.path;
-      ui.source.textContent = area === 'index' ? 'HEAD → 暂存区' : selected.untracked ? '未跟踪文件 · 只读内容' : '暂存区 → 工作区';
+      ui.source.textContent = source !== 'git' ? '原始快照 → 当前文件'
+        : area === 'index' ? 'HEAD → 暂存区' : selected.untracked ? '未跟踪文件 · 只读内容' : '暂存区 → 工作区';
       for (const [value, button] of [['worktree', ui.worktree], ['index', ui.index]]) {
         button.classList.toggle('active', area === value);
         button.setAttribute('aria-pressed', String(area === value));
@@ -251,6 +258,17 @@
 
     return {
       refresh,
+      reset() {
+        ++listGeneration;
+        listAbort?.abort();
+        invalidateDetail();
+        if (ui.dialog.open) ui.dialog.close();
+        files = []; selected = null; source = 'git';
+        ui.index.parentElement.hidden = false;
+        ui.files.replaceChildren(); ui.select.replaceChildren(); ui.content.replaceChildren();
+        ui.filter.value = ''; ui.summary.textContent = '文件变更'; ui.stats.textContent = '';
+        ui.state.textContent = '打开后读取文件变更。';
+      },
       isOpen: () => ui.dialog.open,
       close: () => { if (ui.dialog.open) ui.dialog.close(); },
       setConnected(value) {

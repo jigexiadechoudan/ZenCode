@@ -38,7 +38,7 @@ providers:
     protocol: openai
     model: YOUR_MODEL_ID
     base_url: https://your-provider.example/v1
-    api_key: "${ZENCODE_API_KEY}"
+    # API Key 每次启动后在工作台填写，仅用于本次运行，不写入配置。
 # MCP Server 声明：取消注释后 ZenCode 自动连接、握手、发现并注册其工具（工具名形如「server名:工具名」）
 # transport: stdio（本地子进程）或 http（远程 Server）；stdio 必填 command，http 必填 url
 # env/headers 的值支持 ${ENV_NAME} 引用宿主环境变量；stdio 子进程只继承 PATH + env 显式声明的变量

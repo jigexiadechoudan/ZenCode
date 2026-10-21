@@ -1,52 +1,53 @@
 .changes-list { padding: 16px; }
 .changes-head { margin-bottom: 12px; font-size: 12px; }
 .changes-head strong { color: var(--ink); font-weight: 650; }
-.changes-filter { width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; background: #fff; color: var(--ink); font: inherit; font-size: 12px; }
-.changes-filter:focus-visible, .diff-content:focus-visible { outline: 3px solid #79c5bc; outline-offset: 2px; }
+.changes-filter { width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; background: #ffffff; color: var(--ink); font: inherit; font-size: 12px; }
+.changes-filter:focus-visible, .diff-content:focus-visible { outline: 3px solid #b4b4b4; outline-offset: 2px; }
 .changes-state { color: var(--muted); font-size: 11px; line-height: 1.7; margin: 10px 0; }
-.changed-file { display: block; width: 100%; padding: 12px 10px; margin: 3px 0; text-align: left; background: transparent; border: 1px solid transparent; border-bottom-color: var(--line); border-radius: 7px; color: var(--ink); }
-.changed-file:hover { background: #edf5f3; border-color: #c6ded9; }
+.changed-file { display: block; width: 100%; padding: 12px 10px; margin: 3px 0; text-align: left; background: transparent; border: 1px solid transparent; border-bottom-color: var(--line); border-radius: 4px; color: var(--ink); }
+.changed-file:hover { background: #f3f3f3; border-color: #d9d9d9; }
 .changed-file-path { display: block; overflow-wrap: anywhere; font: 12px/1.6 "Cascadia Code", Consolas, monospace; }
 .change-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
-.change-badge { padding: 2px 5px; border-radius: 4px; background: #e9efef; color: #536e74; font-size: 10px; }
-.change-badge.added { color: #267052; background: #e1f1e8; }
-.change-badge.conflict { color: #a4453c; background: #ffe8df; }
+.change-badge { padding: 2px 5px; border-radius: 4px; background: #eeeeee; color: #696969; font-size: 10px; }
+.change-badge.added { color: #22663b; background: #e6f5eb; }
+.change-badge.removed { color: #a02d3a; background: #fdebed; }
+.change-badge.conflict { color: #595959; background: #ececec; }
 .change-origin { display: block; margin-top: 6px; font-size: 10px; color: var(--muted); overflow-wrap: anywhere; }
 .changes-hint { color: var(--muted); font-size: 10px; line-height: 1.6; margin: 16px 0 0; }
 
-.diff-dialog { --diff-add: #edf8f1; --diff-remove: #fff0ed; width: min(1120px, calc(100vw - 48px)); height: min(820px, calc(100dvh - 64px)); max-width: none; max-height: none; border: 1px solid #c6d9d7; border-radius: 14px; padding: 0; color: var(--ink); background: var(--paper); box-shadow: 0 24px 90px #182d3540; overflow: hidden; }
+.diff-dialog { --diff-add: #e6f5eb; --diff-remove: #fdebed; width: min(1120px, calc(100vw - 48px)); height: min(820px, calc(100dvh - 64px)); max-width: none; max-height: none; border: 1px solid #d5d5d5; border-radius: 4px; padding: 0; color: var(--ink); background: var(--paper); box-shadow: 0 24px 90px #29292940; overflow: hidden; }
 .diff-dialog[open] { display: flex; flex-direction: column; }
-.diff-dialog::backdrop { background: #182d3580; }
+.diff-dialog::backdrop { background: #29292980; }
 .diff-heading { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 20px 24px 15px; border-bottom: 1px solid var(--line); }
 .diff-heading > div { min-width: 0; }
 .diff-heading h2 { margin: 7px 0 0; font: 600 15px/1.6 "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; max-height: 80px; overflow: auto; }
-.diff-heading > button { flex: none; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: #fff; font-size: 21px; }
+.diff-heading > button { flex: none; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: #ffffff; font-size: 21px; }
 .diff-toolbar { display: flex; flex: none; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 24px; background: var(--sidebar); border-bottom: 1px solid var(--line); }
-.diff-toolbar select { flex: 1; min-width: 120px; width: 200px; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); padding: 7px; font-size: 12px; }
-.diff-scope { display: flex; gap: 3px; padding: 3px; border: 1px solid #cedddb; border-radius: 8px; }
-.diff-toolbar button { border: 1px solid var(--line); background: #fff; color: #4f6a73; border-radius: 5px; padding: 6px 9px; font-size: 11px; }
+.diff-toolbar select { flex: 1; min-width: 120px; width: 200px; max-width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #ffffff; color: var(--ink); padding: 7px; font-size: 12px; }
+.diff-scope { display: flex; gap: 3px; padding: 3px; border: 1px solid #dadada; border-radius: 4px; }
+.diff-toolbar button { border: 1px solid var(--line); background: #ffffff; color: #656565; border-radius: 4px; padding: 6px 9px; font-size: 11px; }
 .diff-scope button { border: 0; background: transparent; }
-.diff-scope button.active { background: var(--accent); color: #fff; }
+.diff-scope button.active { background: var(--accent); color: #ffffff; }
 .diff-tools { display: flex; gap: 6px; }
-.diff-tools button[aria-pressed="true"] { background: var(--accent-soft); border-color: #afd5cc; color: var(--accent); }
+.diff-tools button[aria-pressed="true"] { background: var(--accent-soft); border-color: #cccccc; color: var(--accent); }
 .diff-caption { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--line); }
 .diff-stats { display: flex; gap: 10px; align-items: center; font: 600 12px "Cascadia Code", Consolas, monospace; }
 .diff-stats small { font: 10px "Segoe UI", sans-serif; color: var(--muted); }
-.diff-added-count { color: #25704b; }
-.diff-removed-count { color: #ac443b; }
-.diff-notice { flex: none; padding: 12px 24px; margin: 0; background: #fff7e9; color: #825b30; font-size: 12px; line-height: 1.7; }
-.diff-content { flex: 1; min-height: 0; overflow: auto; background: #fff; scrollbar-color: #bbcfc9 #f4f8f7; }
+.diff-added-count { color: #22663b; }
+.diff-removed-count { color: #a02d3a; }
+.diff-notice { flex: none; padding: 12px 24px; margin: 0; background: #f8f8f8; color: #606060; font-size: 12px; line-height: 1.7; }
+.diff-content { flex: 1; min-height: 0; overflow: auto; background: #ffffff; scrollbar-color: #cacaca #f7f7f7; }
 .diff-lines { min-width: 100%; width: max-content; padding-bottom: 18px; font: 12px/1.8 "Cascadia Code", Consolas, "Microsoft YaHei UI", monospace; }
 .diff-line { display: grid; grid-template-columns: 54px 54px 24px minmax(0, 1fr); min-height: 22px; }
-.diff-number { color: #768d89; padding: 0 9px 0 3px; text-align: right; user-select: none; background: #f3f7f680; border-right: 1px solid #dce8e366; }
+.diff-number { color: #888888; padding: 0 9px 0 3px; text-align: right; user-select: none; background: #f6f6f680; border-right: 1px solid #e5e5e566; }
 .diff-sign { text-align: center; user-select: none; }
 .diff-text { padding-right: 20px; white-space: pre; font: inherit; tab-size: 4; }
 .diff-line.added { background: var(--diff-add); }
 .diff-line.removed { background: var(--diff-remove); }
-.diff-line.added .diff-sign { color: #267052; }
-.diff-line.removed .diff-sign { color: #aa463c; }
-.diff-line.hunk { background: #eaf1f7; color: #476581; border-block: 1px solid #dbe6f0; margin-top: 6px; }
-.diff-line.metadata { color: var(--muted); background: #fafcfb; }
+.diff-line.added .diff-sign,.diff-line.added .diff-text { color: #22663b; }
+.diff-line.removed .diff-sign,.diff-line.removed .diff-text { color: #a02d3a; }
+.diff-line.hunk { background: #f0f0f0; color: #616161; border-block: 1px solid #e4e4e4; margin-top: 6px; }
+.diff-line.metadata { color: var(--muted); background: #fcfcfc; }
 .diff-content.wrap .diff-lines { width: 100%; }
 .diff-content.wrap .diff-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .diff-footer { flex: none; padding: 10px 24px; border-top: 1px solid var(--line); color: var(--muted); background: var(--sidebar); font-size: 10px; }

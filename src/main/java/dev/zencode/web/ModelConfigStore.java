@@ -23,12 +23,13 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /** Local configuration editor. Only explicit safe projections may cross the HTTP boundary. */
-public final class ModelConfigStore {
+public final class ModelConfigStore implements AutoCloseable {
     private static final int MAX_BYTES = 1024 * 1024;
     private static final LoadSettings READ_SETTINGS = LoadSettings.builder().setParseComments(true)
             .setAllowDuplicateKeys(false).setMaxAliasesForCollections(0).setCodePointLimit(MAX_BYTES).build();
     private final CliOptions options;
     private final Path path;
+    private final Map<String, ProviderConfig> sessionProviders = new HashMap<>();
     private String activeProvider;
     private String activeModel;
     private String appliedRevision;
@@ -65,6 +66,7 @@ public final class ModelConfigStore {
         this.path = ConfigLoader.configPath(options);
         this.activeProvider = active == null ? "" : active.name();
         this.activeModel = active == null ? "" : active.model();
+        if (active != null) sessionProviders.put(active.name(), active);
         String revision;
         try { revision = revision(readBytes()); } catch (Exception ignored) { revision = ""; }
         this.appliedRevision = revision;
@@ -73,6 +75,26 @@ public final class ModelConfigStore {
     public synchronized Settings read() {
         Document document = document();
         return describe(document);
+    }
+
+    /** Session credentials never cross the server boundary after application. */
+    public synchronized String revealKey(String providerName) {
+        throw new SettingsException(403, "会话密钥不支持回读，请重新输入。");
+    }
+
+    /** Remove credentials left by older versions without ever loading them into the runtime. */
+    public synchronized void clearSavedKeys() {
+        Document document = document();
+        if (removeSavedKeys(document.root)) {
+            atomicWrite(yaml(document.root).getBytes(StandardCharsets.UTF_8), document.revision);
+        }
+    }
+
+    @Override public synchronized void close() {
+        sessionProviders.clear();
+        activeProvider = "";
+        activeModel = "";
+        clearSavedKeys();
     }
 
     public synchronized Settings save(Edit edit) {
@@ -99,12 +121,12 @@ public final class ModelConfigStore {
         if (selected == null) selected = new MappingNode(Tag.MAP, new ArrayList<>(), FlowStyle.BLOCK);
         String key = edit.apiKey.trim();
         if (key.isEmpty()) {
-            key = scalar(selected, "api_key");
-            if (key.isBlank()) throw invalid("请填写 API Key 或 ${ENV_NAME} 环境变量引用。");
             if (!scalar(selected, "base_url").replaceAll("/+$", "").equals(baseUrl)
                     || !scalar(selected, "protocol").equalsIgnoreCase(protocol)) {
                 throw invalid("服务地址或协议已改变，请重新填写对应的 API Key，避免把原密钥发送给其他服务。");
             }
+            key = sessionKey(selected);
+            if (key.isBlank()) throw invalid("请填写本次运行使用的 API Key，重启后需重新填写。");
         }
         field(key, 8192, "API Key 不能为空、包含换行或超过 8192 字符。");
         if (key.startsWith("${") && (!key.matches("\\$\\{[A-Za-z_][A-Za-z0-9_]*}")
@@ -116,7 +138,6 @@ public final class ModelConfigStore {
         put(selected, "protocol", text(protocol));
         put(selected, "model", text(model));
         put(selected, "base_url", text(baseUrl));
-        put(selected, "api_key", text(key));
         put(selected, "thinking", new ScalarNode(Tag.BOOL, String.valueOf(edit.thinking), ScalarStyle.PLAIN));
         if (edit.originalName.isEmpty()) providers.getValue().add(selected);
         put(document.root, "providers", providers);
@@ -124,13 +145,19 @@ public final class ModelConfigStore {
         if (edit.makeDefault || defaultProvider.isEmpty() || defaultProvider.equals(edit.originalName)) {
             put(document.root, "default", text(name));
         }
-        DumpSettings settings = DumpSettings.builder().setDumpComments(true).setSplitLines(false).build();
-        String yaml = new Present(settings).emitToString(new Serialize(settings).serializeOne(document.root).iterator());
+        Map<String, String> sessionKeys = new HashMap<>();
+        for (Node node : providers.getValue()) {
+            MappingNode item = mapping(node);
+            sessionKeys.put(scalar(item, "name"), sessionKey(item));
+        }
+        sessionKeys.put(name, key);
+        removeSavedKeys(document.root);
+        String yaml = yaml(document.root);
         final ConfigLoader.LoadedConfig validated;
         // An explicit UI selection applies now; --provider/default only select the next startup.
-        CliOptions selection = application == null ? options : new CliOptions(options.configPath(), name,
+        CliOptions selection = new CliOptions(options.configPath(), name,
                 options.permissionMode(), options.resume(), options.team(), options.member(), options.spawnTask());
-        try { validated = new ConfigLoader().loadYaml(yaml, selection); }
+        try { validated = new ConfigLoader().loadYaml(yaml, selection, sessionKeys); }
         catch (RuntimeException e) {
             // ConfigException may embed URLs/other private config. Never return its text.
             throw invalid("配置校验未通过，未保存。请检查默认 Provider、启动时的 --provider、环境变量及其他 YAML 配置。");
@@ -139,11 +166,13 @@ public final class ModelConfigStore {
         if (updated.length > MAX_BYTES) throw invalid("配置超过 1 MiB，未保存。");
         if (application == null) {
             atomicWrite(updated, document.revision);
+            sessionProviders.put(name, validated.selectedProvider());
         } else {
             boolean[] persisted = { false };
             try {
                 application.apply(validated, () -> {
                     atomicWrite(updated, document.revision);
+                    sessionProviders.put(name, validated.selectedProvider());
                     persisted[0] = true;
                 });
                 activeProvider = validated.selectedProvider().name();
@@ -163,17 +192,40 @@ public final class ModelConfigStore {
         List<ProviderSummary> summaries = new ArrayList<>();
         for (Node node : providers(document.root).getValue()) {
             MappingNode item = mapping(node);
-            String key = scalar(item, "api_key");
+            String key = sessionKey(item);
             summaries.add(new ProviderSummary(scalar(item, "name"), scalar(item, "protocol").toLowerCase(Locale.ROOT),
                     scalar(item, "model"), publicUrl(scalar(item, "base_url")),
                     "true".equalsIgnoreCase(scalar(item, "thinking")), !key.isBlank(),
-                    key.isBlank() ? "none" : key.startsWith("${") ? "environment" : "local"));
+                    key.isBlank() ? "none" : "memory"));
         }
         return new Settings(path.toString(), document.revision, scalar(document.root, "default"),
                 options.providerName() == null ? "" : options.providerName(), activeProvider, activeModel,
                 activeProvider.isEmpty(), !appliedRevision.equals(document.revision), List.copyOf(summaries),
                 activeProvider.isEmpty() || !appliedRevision.equals(document.revision) || !applicationError.isEmpty(),
                 applicationError, false);
+    }
+
+    private String sessionKey(MappingNode provider) {
+        ProviderConfig configured = sessionProviders.get(scalar(provider, "name"));
+        if (configured == null
+                || !configured.protocol().name().equalsIgnoreCase(scalar(provider, "protocol"))
+                || !configured.baseUrl().toString().replaceAll("/+$", "")
+                    .equals(scalar(provider, "base_url").replaceAll("/+$", ""))) return "";
+        return configured.apiKey();
+    }
+
+    private static boolean removeSavedKeys(MappingNode root) {
+        boolean changed = false;
+        for (Node node : providers(root).getValue()) {
+            changed |= mapping(node).getValue().removeIf(tuple ->
+                    tuple.getKeyNode() instanceof ScalarNode key && key.getValue().equals("api_key"));
+        }
+        return changed;
+    }
+
+    private static String yaml(MappingNode root) {
+        DumpSettings settings = DumpSettings.builder().setDumpComments(true).setSplitLines(false).build();
+        return new Present(settings).emitToString(new Serialize(settings).serializeOne(root).iterator());
     }
 
     private Document document() {

@@ -26,7 +26,7 @@ public final class CommandRegistry {
      * @param spec 命令元数据
      * @throws IllegalArgumentException 命令名或别名与既有条目冲突
      */
-    public void register(CommandSpec spec) {
+    public synchronized void register(CommandSpec spec) {
         if (spec == null) throw new IllegalArgumentException("命令不能为空");
         String nameKey = normalized(spec.command());
         if (index.containsKey(nameKey)) {
@@ -51,7 +51,7 @@ public final class CommandRegistry {
      * @param name 命令名或别名（可带 / 前缀）
      * @return 命中的命令
      */
-    public Optional<CommandSpec> find(String name) {
+    public synchronized Optional<CommandSpec> find(String name) {
         if (name == null) return Optional.empty();
         return Optional.ofNullable(index.get(normalized(name)));
     }
@@ -62,7 +62,7 @@ public final class CommandRegistry {
      * @param name 命令名或别名（可带 / 前缀）
      * @return 找到并移除返回 true，否则 false
      */
-    public boolean remove(String name) {
+    public synchronized boolean remove(String name) {
         if (name == null) return false;
         String key = normalized(name);
         CommandSpec spec = index.get(key);
@@ -76,7 +76,7 @@ public final class CommandRegistry {
     }
 
     /** 全部非隐藏命令（用于列表展示）。 */
-    public List<CommandSpec> list() {
+    public synchronized List<CommandSpec> list() {
         List<CommandSpec> result = new ArrayList<>();
         for (CommandSpec spec : registered) {
             if (!spec.hidden()) result.add(spec);
@@ -89,7 +89,7 @@ public final class CommandRegistry {
      *
      * @param prefix 输入前缀（可含 / 开头或仅 /）
      */
-    public List<CommandSpec> complete(String prefix) {
+    public synchronized List<CommandSpec> complete(String prefix) {
         String like = prefix == null ? "" : normalized(prefix);
         List<CommandSpec> result = new ArrayList<>();
         for (CommandSpec spec : registered) {
@@ -101,7 +101,7 @@ public final class CommandRegistry {
     }
 
     /** 已注册命令总数（含隐藏）。 */
-    public int size() {
+    public synchronized int size() {
         return registered.size();
     }
 

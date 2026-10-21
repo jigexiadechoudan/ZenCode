@@ -18,6 +18,13 @@ public interface ConversationView {
     /** 工具事件回调。summary 为安全摘要（参数或结果），绝不含完整内容。 */
     void showToolEvent(String type, String toolName, String callId, String summary);
 
+    default void showToolEvent(String type, String toolName, String callId, String summary, int round) {
+        showToolEvent(type, toolName, callId, summary);
+    }
+
+    /** Execution milestones only; never pass model reasoning or raw tool output here. */
+    default void showTraceEvent(String phase, String state, String title, String summary, int round) {}
+
     /**
      * 渲染 HITL 权限确认对话框。展示脱敏摘要与五个选择选项。
      * 用户选择后通过 {@link #resolvePermission(HitlDecision)} 回传决策。

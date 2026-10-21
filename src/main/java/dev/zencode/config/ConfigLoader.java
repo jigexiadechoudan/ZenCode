@@ -53,6 +53,11 @@ public final class ConfigLoader {
 
     /** Validate without writing a file or constructing providers / making network requests. */
     public LoadedConfig loadYaml(String yaml, CliOptions options) {
+        return loadYaml(yaml, options, null);
+    }
+
+    /** Session credentials override disk values; inactive providers may have no session key yet. */
+    public LoadedConfig loadYaml(String yaml, CliOptions options, Map<String, String> sessionKeys) {
         Object parsed;
         try {
             parsed = new Load(LoadSettings.builder().build()).loadFromString(yaml);
@@ -96,10 +101,14 @@ public final class ConfigLoader {
             } catch (IllegalArgumentException e) {
                 throw new ConfigException("base_url 无效: " + baseUrl);
             }
-            String apiKey = requiredString(item, "api_key", "供应商缺少 api_key");
+            String apiKey = sessionKeys == null ? requiredString(item, "api_key", "供应商缺少 api_key")
+                    : sessionKeys.getOrDefault(name, "");
             // Inactive entries retain environment references. They must not prevent repairing
             // or selecting a different provider in the UI; only selectedProvider is runtime-ready.
-            if (name.equals(selectedName)) apiKey = resolveApiKey(apiKey);
+            if (name.equals(selectedName)) {
+                if (apiKey.isBlank()) throw new ConfigException("请填写本次运行使用的 API Key");
+                apiKey = resolveApiKey(apiKey);
+            }
             boolean thinking = booleanValue(item.getOrDefault("thinking", false), "thinking 必须是布尔值");
             providers.add(new ProviderConfig(name, protocol, model, uri, apiKey, thinking));
         }

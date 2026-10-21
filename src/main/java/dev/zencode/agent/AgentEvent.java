@@ -16,6 +16,9 @@ import java.util.Objects;
  */
 public sealed interface AgentEvent {
 
+    /** A model request is about to start; carries no prompt or credentials. */
+    record ModelStarted(int round) implements AgentEvent {}
+
     /** 本次运行的用户消息（第一轮发布）。 */
     record UserMessage(String text) implements AgentEvent {
         public UserMessage {

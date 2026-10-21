@@ -34,6 +34,7 @@ public final class SessionManager {
     private final Conversation conversation;
 
     private String currentId;
+    private String projectId;
     private List<ConversationTurn> archivedTurns = List.of();
     private int roundCount;
     private ToolExecutionJournal executionJournal;
@@ -56,6 +57,9 @@ public final class SessionManager {
         executionJournal = journal;
     }
 
+    public void setProjectId(String projectId) { this.projectId = projectId; }
+    public synchronized void detach() { currentId = null; }
+
     /**
      * 启动新会话：生成新会话 ID，写入初始 meta。
      *
@@ -67,7 +71,7 @@ public final class SessionManager {
         archivedTurns = List.of();
         roundCount = 0;
         long now = System.currentTimeMillis();
-        SessionMeta meta = new SessionMeta(currentId, "", "", 0, now, now);
+        SessionMeta meta = new SessionMeta(currentId, "", "", 0, now, now, projectId, false);
         store.writeMeta(currentId, meta);
         return meta;
     }
@@ -82,21 +86,23 @@ public final class SessionManager {
         int archivedCount = archivedTurns.size();
         if (snapshot.size() < archivedCount
                 || !snapshot.subList(0, archivedCount).equals(archivedTurns)) {
-            if (!store.replaceTurns(currentId, snapshot)) return;
+            if (!store.replaceTurns(currentId, snapshot)) throw new IllegalStateException("聊天历史未能保存");
         } else {
             for (int i = archivedCount; i < snapshot.size(); i++) {
-                if (!store.appendTurn(currentId, SessionTurnDto.fromTurn(snapshot.get(i)))) return;
+                if (!store.appendTurn(currentId, SessionTurnDto.fromTurn(snapshot.get(i)))) throw new IllegalStateException("聊天历史未能保存");
                 archivedTurns = List.copyOf(snapshot.subList(0, i + 1));
             }
         }
         archivedTurns = snapshot;
 
         // 更新 meta
-        String title = deriveTitle(snapshot);
+        SessionMeta previous = store.readMeta(currentId);
+        String title = previous != null && previous.manualTitle() ? previous.title() : deriveTitle(snapshot);
         String summary = deriveSummary(snapshot);
         long now = System.currentTimeMillis();
         SessionMeta meta = new SessionMeta(currentId, title, summary,
-                snapshot.size(), getCreatedAtMs(), now);
+                snapshot.size(), getCreatedAtMs(), now,
+                previous == null ? projectId : previous.projectId(), previous != null && previous.manualTitle());
         store.writeMeta(currentId, meta);
     }
 
@@ -107,6 +113,10 @@ public final class SessionManager {
      * @return 恢复结果
      */
     public SessionLoadResult restore(String id) {
+        return restore(id, true);
+    }
+
+    public SessionLoadResult restore(String id, boolean prepareModel) {
         SessionLoadResult result = store.loadValidated(id);
         if (result.turns().isEmpty() && store.readMeta(id) == null) {
             return result;
@@ -122,7 +132,7 @@ public final class SessionManager {
         }
 
         // Token 超限触发压缩
-        if (compressor != null) {
+        if (compressor != null && prepareModel) {
             compressor.prepareForRequest(conversation);
         }
 
@@ -168,7 +178,7 @@ public final class SessionManager {
         archivedTurns = List.of();
         roundCount = 0;
         long now = System.currentTimeMillis();
-        store.writeMeta(currentId, new SessionMeta(currentId, "", "", 0, now, now));
+        store.writeMeta(currentId, new SessionMeta(currentId, "", "", 0, now, now, projectId, false));
     }
 
     /** 列出全部会话 meta。 */

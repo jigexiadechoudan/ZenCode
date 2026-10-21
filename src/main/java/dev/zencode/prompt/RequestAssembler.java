@@ -205,7 +205,7 @@ public final class RequestAssembler {
         injectSeeds(seeded);
         List<ConversationTurn> rebuilt = new ArrayList<>(seeded.snapshot());
         for (ConversationTurn turn : conversation.snapshot()) {
-            if (!refresh || turn.seedType() == null) rebuilt.add(turn);
+            if (!refresh || turn.seedType() == null || turn.seedType() == SeedType.RECOVERY_WARNING) rebuilt.add(turn);
         }
         conversation.replaceAll(rebuilt);
     }

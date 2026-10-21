@@ -317,6 +317,7 @@ public final class Agent implements AgentRunner {
         long deadline = System.nanoTime() + idle.toNanos();
 
         try {
+            run.publish(new AgentEvent.ModelStarted(round));
             handle = provider.stream(request, consumer);
             activeHandle.set(handle);
             while (true) {

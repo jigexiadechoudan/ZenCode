@@ -111,6 +111,6 @@ class AgentPromptTest {
     @Test
     void eventTypesAreSealed() {
         assertTrue(AgentEvent.class.isSealed());
-        assertEquals(10, AgentEvent.class.getPermittedSubclasses().length);
+        assertEquals(11, AgentEvent.class.getPermittedSubclasses().length);
     }
 }

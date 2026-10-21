@@ -27,7 +27,8 @@ class AgentProviderBackpressureTest {
         AgentRun run = agent.run(new Conversation(), "取消满队列", new AgentRunOptions(
                 false, 1, Duration.ofSeconds(5), 1));
         try {
-            // 不消费 UI 队列：UserMessage 占满它，首个 delta 卡在 UI 发布，
+            assertInstanceOf(AgentEvent.UserMessage.class, run.pollEvent(Duration.ofSeconds(2)));
+            // ModelStarted 占满 UI 队列，首个 delta 卡在 UI 发布，
             // 第二个占满 Provider 桥接队列，第三个则卡在 reader 回调。
             assertTrue(provider.thirdEvent.await(2, TimeUnit.SECONDS));
             assertFalse(provider.physical.isDone());

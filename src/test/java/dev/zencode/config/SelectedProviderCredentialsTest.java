@@ -71,10 +71,13 @@ class SelectedProviderCredentialsTest {
         assertEquals("one", result.activeProvider());
         assertNotNull(applied.get());
         assertEquals("fake-repaired-key", applied.get().apiKey());
-        ConfigLoader.LoadedConfig reloaded = new ConfigLoader().load(options);
-        assertEquals("one", reloaded.selectedProvider().name());
-        assertEquals("fake-repaired-key", reloaded.selectedProvider().apiKey());
-        assertEquals(inactiveReference, reloaded.appConfig().provider("two").apiKey());
+        String saved = Files.readString(file);
+        assertFalse(saved.contains("api_key"));
+        assertFalse(saved.contains("fake-repaired-key"));
+        assertFalse(saved.contains(inactiveReference));
+        assertThrows(ConfigException.class, () -> new ConfigLoader().load(options));
+        assertFalse(new ModelConfigStore(options, null).read().providers().stream()
+                .anyMatch(ModelConfigStore.ProviderSummary::keyConfigured));
         assertThrows(ConfigException.class, () -> new ConfigLoader().load(
                 CliOptions.parse(new String[]{"--config", file.toString(), "--provider", "two"})));
     }

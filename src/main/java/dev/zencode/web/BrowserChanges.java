@@ -24,14 +24,20 @@ final class BrowserChanges {
     private static final int MAX_PREVIEW = 256 * 1024;
     private static final int MAX_LINES = 4000;
     private final Path workspace;
+    private final DirectoryChanges directoryChanges;
 
     BrowserChanges(Path workspace) {
         this.workspace = workspace.toAbsolutePath().normalize();
+        directoryChanges = git(4096, "rev-parse", "--show-prefix").ok() ? null : new DirectoryChanges(this.workspace);
     }
 
     record ChangedFile(String path, String oldPath, String index, String worktree,
                        boolean untracked, boolean conflict) {}
-    record ChangeList(boolean available, List<ChangedFile> files, boolean truncated, String message) {}
+    record ChangeList(boolean available, List<ChangedFile> files, boolean truncated, String message, String source) {
+        ChangeList(boolean available, List<ChangedFile> files, boolean truncated, String message) {
+            this(available, files, truncated, message, "git");
+        }
+    }
     record Preview(String path, String area, String kind, String text, boolean truncated, String message) {}
     private record Capture(byte[] bytes, boolean truncated) {
         String text() { return new String(bytes, StandardCharsets.UTF_8); }
@@ -39,6 +45,7 @@ final class BrowserChanges {
     private record GitResult(int exit, Capture output) { boolean ok() { return exit == 0; } }
 
     ChangeList list() {
+        if (directoryChanges != null) return directoryChanges.list();
         GitResult prefixResult = git(4096, "rev-parse", "--show-prefix");
         if (!prefixResult.ok() || prefixResult.output.truncated) {
             return new ChangeList(false, List.of(), false, "当前目录不是 Git 工作区，或本机 Git 不可用。");
@@ -78,6 +85,7 @@ final class BrowserChanges {
     }
 
     Preview preview(String path, String area) {
+        if (directoryChanges != null) return directoryChanges.preview(path, area);
         if (!area.equals("worktree") && !area.equals("index")) throw new IllegalArgumentException();
         // Only paths currently returned by Git are inspectable; no arbitrary file-read endpoint.
         if (path == null || path.isEmpty() || path.length() > 4096 || Path.of(path).isAbsolute()) {

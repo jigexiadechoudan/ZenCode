@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigLoaderTest {
     @Test
-    void exampleConfigUsesLauncherApiKey() throws Exception {
+    void exampleConfigContainsNoSavedApiKey() throws Exception {
         String yaml = Files.readString(Path.of("config.example.yaml"));
 
         var settings = org.snakeyaml.engine.v2.api.LoadSettings.builder().build();
@@ -19,7 +19,7 @@ class ConfigLoaderTest {
         var providers = (java.util.List<?>) parsed.get("providers");
         assertFalse(providers.isEmpty());
         for (Object item : providers) {
-            assertEquals("${ZENCODE_API_KEY}", ((java.util.Map<?, ?>) item).get("api_key"));
+            assertFalse(((java.util.Map<?, ?>) item).containsKey("api_key"));
         }
         assertFalse(yaml.contains("你的APIKey"));
     }

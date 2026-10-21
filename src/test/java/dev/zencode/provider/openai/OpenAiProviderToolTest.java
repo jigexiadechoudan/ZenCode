@@ -199,6 +199,56 @@ class OpenAiProviderToolTest {
     }
 
     @Test
+    void priorThinkingIsNotReplayedIntoAssistantContent() throws Exception {
+        responseBody = sse(chunk().toString()) + sse("[DONE]");
+
+        ConversationTurn first = new ConversationTurn(List.of(
+                new ConversationContent.UserText("查询"),
+                new ConversationContent.ThinkingText("内部推理"),
+                new ConversationContent.AssistantText("正式回答")
+        ), null, dev.zencode.chat.Usage.unknown());
+
+        OpenAiProvider provider = newProvider();
+        ProviderRequest request = new ProviderRequest(List.of(first), null, null, List.of());
+        provider.stream(request, e -> {}).completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+        String body = capturedBodies.get(0);
+        JsonNode messages = mapper.readTree(body).path("messages");
+        assertEquals(2, messages.size());
+        assertEquals("assistant", messages.get(1).path("role").asText());
+        assertEquals("正式回答", messages.get(1).path("content").asText());
+        assertFalse(body.contains("内部推理"));
+        assertFalse(body.contains("【思考】"));
+    }
+
+    @Test
+    void thinkingOnlyToolCallHistoryUsesEmptyAssistantContent() throws Exception {
+        responseBody = sse(chunk().toString()) + sse("[DONE]");
+
+        ToolCall call = new ToolCall("call-A", "read_file", Map.of("path", "a.txt"),
+                "{\"path\":\"a.txt\"}", "openai");
+        ConversationTurn first = new ConversationTurn(List.of(
+                new ConversationContent.UserText("查询"),
+                new ConversationContent.ThinkingText("内部推理"),
+                new ConversationContent.ToolCallBlock(call)
+        ), null, dev.zencode.chat.Usage.unknown());
+
+        OpenAiProvider provider = newProvider();
+        ProviderRequest request = new ProviderRequest(List.of(first), null, null, List.of());
+        provider.stream(request, e -> {}).completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+        String body = capturedBodies.get(0);
+        JsonNode messages = mapper.readTree(body).path("messages");
+        assertEquals(2, messages.size());
+        JsonNode assistant = messages.get(1);
+        assertEquals("assistant", assistant.path("role").asText());
+        assertEquals("", assistant.path("content").asText());
+        assertEquals("call-A", assistant.path("tool_calls").get(0).path("id").asText());
+        assertFalse(body.contains("内部推理"));
+        assertFalse(body.contains("【思考】"));
+    }
+
+    @Test
     void requestContainsFunctionToolSchemas() throws Exception {
         responseBody = sse(chunk().toString()) + sse("[DONE]");
 

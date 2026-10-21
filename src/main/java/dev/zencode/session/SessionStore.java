@@ -189,14 +189,20 @@ public final class SessionStore {
     /** 写入 meta 文件（单行 JSON 覆盖写）。 */
     public void writeMeta(String id, SessionMeta meta) {
         Path dir = sessionsDir();
-        if (dir == null) return;
+        if (dir == null) throw new IllegalStateException("无法创建会话目录");
         Path file = dir.resolve(id + META_SUFFIX);
+        Path temporary = null;
         try {
             String json = new com.fasterxml.jackson.databind.ObjectMapper()
                     .writeValueAsString(meta);
-            Files.writeString(file, json, StandardCharsets.UTF_8);
+            temporary = Files.createTempFile(dir, id + "-", ".tmp");
+            Files.writeString(temporary, json, StandardCharsets.UTF_8);
+            Files.move(temporary, file, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            // 写入失败不阻断
+            throw new IllegalStateException("会话信息未能保存，请检查目录权限和磁盘状态");
+        } finally {
+            if (temporary != null) try { Files.deleteIfExists(temporary); } catch (IOException ignored) { }
         }
     }
 
@@ -244,12 +250,12 @@ public final class SessionStore {
         try {
             deleted |= Files.deleteIfExists(dir.resolve(id + JSONL_SUFFIX));
         } catch (IOException e) {
-            // 忽略
+            throw new IllegalStateException("聊天正文未能删除");
         }
         try {
             deleted |= Files.deleteIfExists(dir.resolve(id + META_SUFFIX));
         } catch (IOException e) {
-            // 忽略
+            throw new IllegalStateException("聊天信息未能删除");
         }
         return deleted;
     }

@@ -76,6 +76,22 @@ public final class ConversationController {
     private volatile java.nio.file.Path workingDirectory;
     private CompletableFuture<MemoryExtractor.ExtractResult> memoryExtraction;
     private volatile boolean sessionStarted;
+    private boolean closingForSwitch;
+    private SessionActions sessionActions;
+
+    public interface SessionActions {
+        boolean create();
+        boolean restore(String id);
+        boolean delete(String id);
+    }
+
+    public void setSessionActions(SessionActions actions) { sessionActions = actions; }
+    public void saveSession() { if (sessionManager != null) sessionManager.savePending(); }
+    public void prepareSession(String id) {
+        if (id != null) sessionManager.restore(id, false);
+    }
+    public void prepareForSwitchClose() { closingForSwitch = true; }
+    public void discardSession() { sessionManager.detach(); }
 
     // Hook 系统（装配期经 setHookEngine 注入，可为空）
     private volatile HookEngine hookEngine;
@@ -167,6 +183,7 @@ public final class ConversationController {
             return true;
         } catch (RuntimeException e) {
             view.showError("请求启动失败");
+            view.showTraceEvent("run", "failed", "请求启动失败", "", 0);
             finishBusy();
             return true;
         }
@@ -242,13 +259,13 @@ public final class ConversationController {
 
     public void close() {
         cancel();
-        if (sessionStarted) {
+        if (sessionStarted && !closingForSwitch) {
             runHook(HookEvent.SESSION_END, null, null);
         }
         if (sessionManager != null) {
             sessionManager.savePending();
         }
-        if (memoryExtractor != null && memoryConfig != null && memoryConfig.enabled()) {
+        if (!closingForSwitch && memoryExtractor != null && memoryConfig != null && memoryConfig.enabled()) {
             triggerMemoryExtraction();
             CompletableFuture<MemoryExtractor.ExtractResult> pending;
             synchronized (this) { pending = memoryExtraction; }
@@ -299,6 +316,7 @@ public final class ConversationController {
 
     /** 恢复指定会话。忙碌时拒绝。 */
     public boolean loadSession(String id) {
+        if (sessionActions != null) return sessionActions.restore(id);
         if (busy.get() || sessionManager == null) return false;
         if (sessionManager.list().stream().noneMatch(meta -> meta.id().equals(id))) return false;
         sessionManager.savePending();
@@ -308,6 +326,7 @@ public final class ConversationController {
 
     /** 删除指定会话。忙碌时拒绝。 */
     public boolean deleteSession(String id) {
+        if (sessionActions != null) return sessionActions.delete(id);
         if (busy.get() || sessionManager == null) return false;
         try {
             return sessionManager.delete(id);
@@ -318,6 +337,7 @@ public final class ConversationController {
 
     /** 新建会话。忙碌时拒绝。 */
     public boolean newSession() {
+        if (sessionActions != null) return sessionActions.create();
         if (busy.get() || sessionManager == null) return false;
         sessionManager.savePending();
         sessionManager.beginNew();
@@ -398,6 +418,7 @@ public final class ConversationController {
             Thread.ofVirtual().name("zencode-controller-fork").start(() -> consumeFork(run));
             return "已开始 fork 执行 Skill " + skill.name();
         } catch (RuntimeException e) {
+            view.showTraceEvent("run", "failed", "fork 启动失败", "", 0);
             finishBusy();
             return "fork 启动失败";
         }
@@ -423,34 +444,44 @@ public final class ConversationController {
 
     /** 处理 fork 事件；终止时把最终回复摘要回流主对话历史。 */
     private boolean handleFork(AgentEvent event) {
-        if (event instanceof AgentEvent.ThinkingDelta delta) {
+        if (event instanceof AgentEvent.ModelStarted model) {
+            view.showTraceEvent("model", "running", "请求模型", "", model.round());
+        } else if (event instanceof AgentEvent.ThinkingDelta delta) {
+            view.showTraceEvent("model", "running", "模型思考", "", delta.round());
             view.appendThinking(delta.text());
         } else if (event instanceof AgentEvent.TextDelta delta) {
+            view.showTraceEvent("model", "running", "生成回复", "", delta.round());
             view.appendAnswer(delta.text());
             textStreamed = true;
         } else if (event instanceof AgentEvent.ToolStarted started) {
-            view.showToolEvent("tool_start", started.toolName(), started.callId(), started.safeSummary());
+            view.showToolEvent("tool_start", started.toolName(), started.callId(), started.safeSummary(), started.round());
         } else if (event instanceof AgentEvent.ToolFinished finished) {
             ToolResult result = finished.result();
             String type = switch (result.status()) {
                 case SUCCESS, TRUNCATED -> "tool_completed";
                 case RESTRICTED -> "tool_blocked";
+                case CANCELLED -> "tool_cancelled";
                 default -> "tool_failed";
             };
             view.showToolEvent(type, finished.toolName(), finished.callId(),
-                    ToolSummary.ofResult(new ToolResultContent(result, finished.callId(), finished.toolName())));
+                    ToolSummary.ofResult(new ToolResultContent(result, finished.callId(), finished.toolName())), finished.round());
         } else if (event instanceof AgentEvent.PermissionRequested permission) {
             view.showPermissionRequest(new HitlRequest(permission.callId(), permission.toolName(),
                     permission.safeSummary(), permission.reason()));
+        } else if (event instanceof AgentEvent.RoundUsageCommitted usage) {
+            view.showTraceEvent("round", "completed", "第 " + usage.round() + " 轮完成", "", usage.round());
         } else if (event instanceof AgentEvent.FinalReply reply) {
+            view.showTraceEvent("model", "completed", "回复完成", "", 0);
             forkFinalText = reply.text();
             if (!textStreamed) {
                 view.appendAnswer(reply.text());
             }
             view.finishAssistantMessage();
         } else if (event instanceof AgentEvent.Error error) {
+            view.showTraceEvent("error", "failed", "执行异常", error.safeMessage(), 0);
             view.showError(error.safeMessage());
         } else if (event instanceof AgentEvent.Terminated terminated) {
+            finishTrace(terminated);
             if (terminated.reason() == AgentTerminationReason.COMPLETED
                     || terminated.reason() == AgentTerminationReason.ROUND_LIMIT) {
                 if (forkFinalText != null && !forkFinalText.isBlank()) {
@@ -462,6 +493,16 @@ public final class ConversationController {
             return true;
         }
         return false;
+    }
+
+    private void finishTrace(AgentEvent.Terminated terminated) {
+        String state = switch (terminated.reason()) {
+            case COMPLETED -> "completed";
+            case CANCELLED -> "cancelled";
+            case ROUND_LIMIT -> "limited";
+            default -> "failed";
+        };
+        view.showTraceEvent("run", state, "任务结束", "", terminated.completedRounds());
     }
 
     /** 手动触发记忆提取（仅空闲时执行）。 */
@@ -522,30 +563,36 @@ public final class ConversationController {
 
     /** 处理单个事件。返回 true 表示收到终止事件。 */
     private boolean handle(AgentEvent event) {
-        if (event instanceof AgentEvent.UserMessage user) {
+        if (event instanceof AgentEvent.ModelStarted model) {
+            view.showTraceEvent("model", "running", "请求模型", "", model.round());
+        } else if (event instanceof AgentEvent.UserMessage user) {
             textStreamed = false;
             view.showUserMessage(user.text());
             view.beginAssistantMessage();
         } else if (event instanceof AgentEvent.ThinkingDelta delta) {
+            view.showTraceEvent("model", "running", "模型思考", "", delta.round());
             view.appendThinking(delta.text());
         } else if (event instanceof AgentEvent.TextDelta delta) {
+            view.showTraceEvent("model", "running", "生成回复", "", delta.round());
             view.appendAnswer(delta.text());
             textStreamed = true;
         } else if (event instanceof AgentEvent.ToolStarted started) {
-            view.showToolEvent("tool_start", started.toolName(), started.callId(), started.safeSummary());
+            view.showToolEvent("tool_start", started.toolName(), started.callId(), started.safeSummary(), started.round());
         } else if (event instanceof AgentEvent.ToolFinished finished) {
             ToolResult result = finished.result();
             String type = switch (result.status()) {
                 case SUCCESS, TRUNCATED -> "tool_completed";
                 case RESTRICTED -> "tool_blocked";
+                case CANCELLED -> "tool_cancelled";
                 default -> "tool_failed";
             };
             view.showToolEvent(type, finished.toolName(), finished.callId(),
-                    ToolSummary.ofResult(new ToolResultContent(result, finished.callId(), finished.toolName())));
+                    ToolSummary.ofResult(new ToolResultContent(result, finished.callId(), finished.toolName())), finished.round());
         } else if (event instanceof AgentEvent.PermissionRequested permission) {
             view.showPermissionRequest(new HitlRequest(permission.callId(), permission.toolName(),
                     permission.safeSummary(), permission.reason()));
         } else if (event instanceof AgentEvent.RoundUsageCommitted u) {
+            view.showTraceEvent("round", "completed", "第 " + u.round() + " 轮完成", "", u.round());
             view.showUsage(u.usage(), cumulativeUsage());
             // 每轮提交后增量存档
             if (sessionManager != null) {
@@ -559,13 +606,16 @@ public final class ConversationController {
                 }
             }
         } else if (event instanceof AgentEvent.FinalReply reply) {
+            view.showTraceEvent("model", "completed", "回复完成", "", 0);
             if (!textStreamed) {
                 view.appendAnswer(reply.text());
             }
             view.finishAssistantMessage();
         } else if (event instanceof AgentEvent.Error error) {
+            view.showTraceEvent("error", "failed", "执行异常", error.safeMessage(), 0);
             view.showError(error.safeMessage());
         } else if (event instanceof AgentEvent.Terminated terminated) {
+            finishTrace(terminated);
             if (terminated.reason() == AgentTerminationReason.CANCELLED) {
                 view.markAssistantAborted();
             }

@@ -26,6 +26,23 @@ class ModelConfigStoreTest {
                 "https://provider.invalid/v1", "synthetic-key-not-a-secret", false, makeDefault);
     }
 
+    @Test void credentialsNeverReachDiskAndRestartRequiresANewKey() throws Exception {
+        var store = new ModelConfigStore(options(), null);
+        store.save(edit(store.read(), "", "first", true), (config, persist) -> persist.run());
+        String saved = Files.readString(options().configPath());
+        assertFalse(saved.contains("api_key"));
+        assertFalse(saved.contains("synthetic-key-not-a-secret"));
+        assertTrue(store.read().providers().getFirst().keyConfigured());
+        assertThrows(ModelConfigStore.SettingsException.class, () -> store.revealKey("first"));
+        store.close();
+        var restarted = new ModelConfigStore(options(), null);
+        assertFalse(restarted.read().providers().getFirst().keyConfigured());
+        var state = restarted.read();
+        assertThrows(ModelConfigStore.SettingsException.class, () -> restarted.save(
+                new ModelConfigStore.Edit(state.revision(), "first", "first", "openai", "example-model",
+                        "https://provider.invalid/v1", "", false, true)));
+    }
+
     @Test void firstSaveAppliesSelectedProviderWithoutRestart() {
         var store = new ModelConfigStore(options(), null);
         AtomicReference<String> selected = new AtomicReference<>();

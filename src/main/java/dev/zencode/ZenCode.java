@@ -154,19 +154,13 @@ public final class ZenCode {
         try {
             CliOptions options = CliOptions.parse(args);
             if (options.team() != null && options.member() != null) {
-                runMemberMode(options, new ConfigLoader().load(options));
-                return;
+                throw new ConfigException("会话密钥模式不支持外部团队进程，请使用 INPROCESS 队员。");
             }
-            ConfigLoader.LoadedConfig loaded = null;
-            try {
-                loaded = new ConfigLoader().load(options);
-            } catch (ConfigException e) {
-                System.out.println("模型配置尚未就绪，将打开本地配置页面。保存并应用后即可开始聊天。");
-            }
-            ModelConfigStore settings = new ModelConfigStore(options, loaded == null ? null : loaded.selectedProvider());
+            ModelConfigStore settings = new ModelConfigStore(options, null);
+            settings.clearSavedKeys();
+            System.out.println("请填写本次运行使用的 API Key。密钥仅在内存中使用，退出后失效。");
             try (BrowserWorkbench app = new BrowserWorkbench(settings, System.getProperty("user.dir"),
-                    config -> createRuntime(options, config))) {
-                if (loaded != null) app.initialize(loaded);
+                    (config, context, provider) -> createRuntime(options, config, context, provider))) {
                 Thread shutdown = new Thread(app::close, "zencode-browser-shutdown");
                 Runtime.getRuntime().addShutdownHook(shutdown);
                 try { app.run(); }
@@ -185,13 +179,13 @@ public final class ZenCode {
     }
 
     /** Build once, including after first-time setup; ordinary model changes never recreate conversation state. */
-    private static BrowserWorkbench.RuntimeSession createRuntime(CliOptions options, ConfigLoader.LoadedConfig loaded)
+    private static BrowserWorkbench.RuntimeSession createRuntime(CliOptions options, ConfigLoader.LoadedConfig loaded,
+            BrowserWorkbench.RuntimeContext context, SwitchableProvider provider)
             throws Exception {
         java.util.Deque<Runnable> resources = new java.util.ArrayDeque<>();
         try {
-            java.nio.file.Path workDir = java.nio.file.Path.of(System.getProperty("user.dir"));
-            SwitchableProvider provider = new SwitchableProvider(loaded.selectedProvider());
-            resources.push(provider::close);
+            java.nio.file.Path workDir = context.workingDirectory();
+            var switching = new java.util.concurrent.atomic.AtomicBoolean();
 
             // Worktree 系统装配：git 仓库下启用，非 git 降级；--resume 恢复 worktree 目录
             dev.zencode.worktree.WorktreeManager worktreeManager = null;
@@ -200,7 +194,7 @@ public final class ZenCode {
                         new dev.zencode.worktree.WorktreeSessionStore(workDir);
                 worktreeManager = new dev.zencode.worktree.WorktreeManager(
                         workDir, loaded.worktree(), worktreeStore, () -> {});
-                if (options.resume() && worktreeManager.currentName() != null) {
+                if (context.initial() && options.resume() && worktreeManager.currentName() != null) {
                     workDir = worktreeManager.currentDirectory();
                 } else if (worktreeManager.currentName() != null) {
                     worktreeManager.exit();
@@ -249,15 +243,15 @@ public final class ZenCode {
             dev.zencode.memory.MemoryConfig memoryCfg = loaded.appConfig().memory();
             MemoryStore memoryStore = null;
             InstructionLoader instructionLoader = null;
-            SessionManager sessionManager = null;
+            SessionStore sessionStore = new SessionStore(context.storageRoot());
+            SessionManager sessionManager = new SessionManager(sessionStore, memoryCfg, null, conversation);
+            sessionManager.setProjectId(context.projectId());
             MemoryExtractor memoryExtractor = null;
             if (memoryCfg.enabled()) {
                 memoryStore = new MemoryStore(workDir,
                         java.nio.file.Path.of(System.getProperty("user.home")), memoryCfg);
                 instructionLoader = new InstructionLoader(workDir,
                         java.nio.file.Path.of(System.getProperty("user.home")), memoryCfg);
-                SessionStore sessionStore = new SessionStore(workDir);
-                sessionManager = new SessionManager(sessionStore, memoryCfg, null, conversation);
                 memoryExtractor = new MemoryExtractor(provider, Duration.ofSeconds(30));
             }
 
@@ -289,6 +283,7 @@ public final class ZenCode {
                     instructionLoader, memoryStore,
                     skillRegistry, toolRegistry, protocol, activeSkills);
             assembler.setHookEngine(hookEngine);
+            assembler.refreshForNewDirectory(workDir, instructionLoader, memoryStore);
 
             // 子 Agent 系统装配：链路追踪 + 后台任务 + 委派工具 + 斜杠命令
             dev.zencode.subagent.TraceRegistry traceRegistry = new dev.zencode.subagent.TraceRegistry();
@@ -399,7 +394,7 @@ public final class ZenCode {
             resources.push(controller::close);
             controller.setSkillSystem(skillRegistry, activeSkills);
             controller.setHookEngine(hookEngine);
-            hookEngine.runHooks(HookEvent.STARTUP, new HookContext(
+            if (context.initial()) hookEngine.runHooks(HookEvent.STARTUP, new HookContext(
                     HookEvent.STARTUP.name().toLowerCase(java.util.Locale.ROOT),
                     null, java.util.Map.of(), null, null, null));
             dev.zencode.worktree.WorktreeCleanupTask cleanupTask = null;
@@ -409,12 +404,12 @@ public final class ZenCode {
                 cleanupTask.start();
                 resources.push(cleanupTask::stop);
             }
-            resources.push(() -> hookEngine.runHooks(HookEvent.SHUTDOWN, new HookContext(
+            resources.push(() -> { if (!switching.get()) hookEngine.runHooks(HookEvent.SHUTDOWN, new HookContext(
                     HookEvent.SHUTDOWN.name().toLowerCase(java.util.Locale.ROOT),
-                    null, java.util.Map.of(), null, null, null)));
+                    null, java.util.Map.of(), null, null, null)); });
             java.util.function.BooleanSupplier busy = () -> controller.isBusy() || view.isBusy()
                     || agent.hasActiveRuns() || taskManager.hasActiveTasks() || provider.isStreaming()
-                    || teamManager.hasModelChangeBlockers();
+                    || controller.hasActiveMemoryExtraction() || teamManager.hasModelChangeBlockers();
             ModelConfigStore.Application applyModel = (config, persist) -> {
                 try {
                     teamManager.withModelChangeGuard(() -> {
@@ -436,6 +431,10 @@ public final class ZenCode {
             var cleaned = new java.util.concurrent.atomic.AtomicBoolean();
             return new BrowserWorkbench.RuntimeSession(view, controller, conversation, router, memoryStore,
                     workDir.toString(), applyModel, busy, () -> {
+                        if (cleaned.compareAndSet(false, true)) closeResources(resources);
+                    }, () -> {
+                        switching.set(true);
+                        controller.prepareForSwitchClose();
                         if (cleaned.compareAndSet(false, true)) closeResources(resources);
                     });
         } catch (Exception | Error e) {

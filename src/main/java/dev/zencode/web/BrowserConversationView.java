@@ -1,6 +1,7 @@
 package dev.zencode.web;
 
 import dev.zencode.app.ConversationController;
+import dev.zencode.chat.ConversationContent;
 import dev.zencode.chat.ConversationTurn;
 import dev.zencode.chat.Usage;
 import dev.zencode.permission.hitl.HitlDecision;
@@ -30,6 +31,11 @@ public final class BrowserConversationView implements ConversationView {
     private boolean busy;
     private Map<String, Object> usage = Map.of();
     private HitlRequest pendingPermission;
+    private String runId = "";
+    private int runNumber;
+    private int modelRound;
+    private int approvalNumber;
+    private boolean historical;
 
     public BrowserConversationView(Supplier<ConversationController> controller) {
         this.controller = controller;
@@ -101,25 +107,61 @@ public final class BrowserConversationView implements ConversationView {
         events.clear();
         messages.clear();
         activities.clear();
+        runId = "";
+        runNumber = 0;
+        modelRound = 0;
         activeMessage = null;
         usage = Map.of();
         emit("reset", Map.of());
     }
 
-    /** 会话切换后只展示用户与助手文本，不向浏览器暴露工具参数或结果。 */
+    /** Restore messages and tool status without exposing raw tool arguments or output. */
     public synchronized void showHistory(List<ConversationTurn> turns) {
         clear();
+        historical = true;
         for (ConversationTurn turn : turns) {
             if (turn.seedType() != null) continue;
             if (turn.userMessage() != null && !turn.userMessage().text().isBlank()) {
+                beginRun("restored");
                 showUserMessage(turn.userMessage().text());
             }
-            if (turn.assistantMessage() != null && !turn.assistantMessage().text().isBlank()) {
-                beginAssistantMessage();
-                appendAnswer(turn.assistantMessage().text());
-                finishAssistantMessage();
+            boolean assistantStarted = false;
+            for (ConversationContent content : turn.contents()) {
+                if (content instanceof ConversationContent.ThinkingText thinking) {
+                    if (!thinking.text().isBlank()) {
+                        if (!assistantStarted) {
+                            beginAssistantMessage();
+                            assistantStarted = true;
+                        }
+                        appendThinking(thinking.text());
+                    }
+                } else if (content instanceof ConversationContent.AssistantText answer) {
+                    if (!answer.text().isBlank()) {
+                        if (!assistantStarted) {
+                            beginAssistantMessage();
+                            assistantStarted = true;
+                        }
+                        appendAnswer(answer.text());
+                    }
+                } else if (content instanceof ConversationContent.ToolCallBlock call) {
+                    if (runId.isEmpty()) beginRun("restored");
+                    showToolEvent("tool_start", call.toolName(), call.callId(), "历史工具调用");
+                } else if (content instanceof ConversationContent.ToolResultBlock result) {
+                    var status = result.toolResult().result().status();
+                    String type = switch (status) {
+                        case SUCCESS, TRUNCATED -> "tool_completed";
+                        case RESTRICTED -> "tool_blocked";
+                        case CANCELLED -> "tool_cancelled";
+                        default -> "tool_failed";
+                    };
+                    showToolEvent(type, result.toolName(), result.callId(),
+                            "历史结果：" + status.name());
+                }
             }
+            if (assistantStarted) finishAssistantMessage();
         }
+        finishOpenSteps("interrupted");
+        historical = false;
     }
 
     @Override public synchronized void showUserMessage(String text) {
@@ -174,8 +216,13 @@ public final class BrowserConversationView implements ConversationView {
     }
 
     @Override public synchronized void setBusy(boolean busy) {
+        if (busy && !this.busy) beginRun("running");
         this.busy = busy;
         if (!busy) {
+            Map<String, Object> run = activities.get(runId);
+            if (run != null && "running".equals(run.get("state"))) {
+                showTraceEvent("run", "completed", "任务结束", "", 0);
+            }
             finishActive("complete");
             clearPermission();
         }
@@ -183,18 +230,92 @@ public final class BrowserConversationView implements ConversationView {
     }
 
     @Override public synchronized void showToolEvent(String type, String toolName, String callId, String summary) {
+        showToolEvent(type, toolName, callId, summary, 0);
+    }
+
+    @Override public synchronized void showToolEvent(String type, String toolName, String callId, String summary, int round) {
         expirePermission();
-        String id = callId == null || callId.isBlank() ? "event-" + (sequence + 1) : callId;
-        Map<String, Object> data = Map.of("state", type == null ? "" : type,
-                "name", toolName == null ? "" : toolName,
-                "callId", id, "summary", summary == null ? "" : summary);
-        activities.put(id, data);
-        emit("tool", data);
+        if (runId.isEmpty()) beginRun(historical ? "restored" : "running");
+        if ("tool_start".equals(type)) finishModel("completed");
+        String call = callId == null || callId.isBlank() ? "event-" + (sequence + 1) : callId;
+        String id = runId + ":tool:" + call;
+        Map<String, Object> previous = activities.get(id);
+        Map<String, Object> data = step(id, "tool", type == null ? "" : type,
+                toolName == null ? "工具" : toolName, summary, round);
+        data.put("callId", call);
+        data.put("requestSummary", previous == null ? (summary == null ? "" : summary) : previous.getOrDefault("requestSummary", ""));
+        if (!"tool_start".equals(type) && !"tool_waiting".equals(type)) data.put("resultSummary", summary == null ? "" : summary);
+        publish(data, "tool");
+    }
+
+    @Override public synchronized void showTraceEvent(String phase, String state, String title, String summary, int round) {
+        if (runId.isEmpty()) return;
+        if (phase.equals("model")) {
+            if (round == 0) { finishModel(state); return; }
+            modelRound = round;
+        } else if (phase.equals("round")) finishModel("completed");
+        if (phase.equals("run")) finishOpenSteps(state.equals("completed") ? "completed" : state);
+        String id = phase.equals("run") ? runId : runId + ":" + phase + ":" + round;
+        Map<String, Object> previous = activities.get(id);
+        if (previous != null && state.equals(previous.get("state")) && title.equals(previous.get("name"))) return;
+        publish(step(id, phase, state, title, summary, round), "trace");
+    }
+
+    private void beginRun(String state) {
+        finishOpenSteps("interrupted");
+        runId = "run-" + (++runNumber) + "-" + UUID.randomUUID();
+        modelRound = 0;
+        approvalNumber = 0;
+        publish(step(runId, "run", state, "任务 " + runNumber, "", 0), "trace");
+    }
+
+    private Map<String, Object> step(String id, String phase, String state, String title, String summary, int round) {
+        Map<String, Object> previous = activities.get(id);
+        Map<String, Object> data = new LinkedHashMap<>(previous == null ? Map.of() : previous);
+        long now = historical ? 0 : System.currentTimeMillis();
+        data.put("id", id); data.put("runId", runId); data.put("runNumber", runNumber);
+        data.put("phase", phase); data.put("state", state); data.put("name", title);
+        data.put("summary", summary == null ? "" : summary); data.put("round", round);
+        data.putIfAbsent("startedAt", now); data.put("historical", historical);
+        if (phase.equals("approval")) data.putIfAbsent("requestSummary", summary == null ? "" : summary);
+        if (!List.of("running", "waiting", "tool_start", "tool_waiting").contains(state)) {
+            data.put("finishedAt", now);
+            data.put("durationMs", now == 0 ? 0 : Math.max(0, now - ((Number)data.get("startedAt")).longValue()));
+        }
+        return data;
+    }
+
+    private void publish(Map<String, Object> data, String type) {
+        String id = data.get("id").toString();
+        activities.put(id, Map.copyOf(data));
+        emit(type, data);
+    }
+
+    private void finishModel(String state) {
+        String id = runId + ":model:" + modelRound;
+        Map<String, Object> model = activities.get(id);
+        if (model != null && !model.containsKey("finishedAt")) {
+            publish(step(id, "model", state, model.get("name").toString(), "", modelRound), "trace");
+        }
+    }
+
+    private void finishOpenSteps(String state) {
+        for (Map<String, Object> item : List.copyOf(activities.values())) {
+            if (runId.equals(item.get("runId")) && !"run".equals(item.get("phase")) && !item.containsKey("finishedAt")) {
+                publish(step(item.get("id").toString(), item.get("phase").toString(), state,
+                        item.get("name").toString(), item.getOrDefault("summary", "").toString(),
+                        ((Number)item.getOrDefault("round", 0)).intValue()), "trace");
+            }
+        }
     }
 
     @Override public synchronized void showPermissionRequest(HitlRequest request) {
         if (!controller.get().hitlBroker().isPending(request.callId())) return;
         pendingPermission = request;
+        showTraceEvent("approval", "waiting", "等待审批", request.reason(), ++approvalNumber);
+        Map<String, Object> tool = activities.get(runId + ":tool:" + request.callId());
+        if (tool != null) showToolEvent("tool_waiting", request.toolName(), request.callId(),
+                tool.getOrDefault("requestSummary", "").toString(), ((Number)tool.getOrDefault("round", 0)).intValue());
         emit("permission", Map.of("callId", request.callId(), "tool", request.toolName(),
                 "summary", request.safeSummary(), "reason", request.reason()));
     }
@@ -205,6 +326,11 @@ public final class BrowserConversationView implements ConversationView {
             expirePermission();
             return false;
         }
+        showTraceEvent("approval", decision.name().startsWith("DENY") ? "rejected" : "approved",
+                decision.name().startsWith("DENY") ? "已拒绝操作" : "已允许操作", "", approvalNumber);
+        Map<String, Object> tool = activities.get(runId + ":tool:" + callId);
+        if (tool != null && !decision.name().startsWith("DENY")) showToolEvent("tool_start", tool.get("name").toString(), callId,
+                tool.getOrDefault("requestSummary", "").toString(), ((Number)tool.getOrDefault("round", 0)).intValue());
         clearPermission();
         return true;
     }
@@ -226,6 +352,10 @@ public final class BrowserConversationView implements ConversationView {
 
     private void clearPermission() {
         if (pendingPermission == null) return;
+        Map<String, Object> approval = activities.get(runId + ":approval:" + approvalNumber);
+        if (approval != null && "waiting".equals(approval.get("state"))) {
+            showTraceEvent("approval", "interrupted", "审批已结束", "", approvalNumber);
+        }
         pendingPermission = null;
         emit("permission_clear", Map.of());
     }

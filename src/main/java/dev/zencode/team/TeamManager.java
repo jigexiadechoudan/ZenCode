@@ -222,7 +222,10 @@ public final class TeamManager {
         if (rt.member(name).isPresent()) {
             throw new TeamException("队员名已存在: " + name);
         }
-        BackendType backend = detector.detect(req.backend());
+        if (req.backend() != BackendType.AUTO && req.backend() != BackendType.INPROCESS) {
+            throw new TeamException("密钥仅在当前进程内使用，请选择 INPROCESS 队员。");
+        }
+        BackendType backend = detector.detect(BackendType.INPROCESS);
         String agentId = "m-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String workDirStr = baseContext.workingDirectory().toString();
         if (req.isolation() && worktreeManager != null
